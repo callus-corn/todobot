@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -19,25 +21,56 @@ const (
 )
 
 func main() {
+	//セリフ用乱数設定
 	rand.Seed(int64(time.Now().Second()))
+
+	//ready機能の開始時間設定
+	t, err := getTime()
+	if err != nil {
+		log.Fatal(err)
+	}
+	start := time.Until(t)
+	timer := time.NewTimer(start)
 
 	dg, err := discordgo.New("Bot " + TOKEN)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	//返事
 	dg.AddHandler(message)
+	//メモ追加
 	dg.AddHandler(add)
+	//メモ削除
 	dg.AddHandler(remove)
+	//レディチェ
+	dg.AddHandler(ready)
 
 	err = dg.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	//Ctrl+Cで終了
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
-	dg.Close()
+
+L:
+	for {
+		select {
+		case <-timer.C:
+			rotate()
+			check(dg, "")
+			reset, err := getTime()
+			if err != nil {
+				log.Fatal(err)
+			}
+			timer.Reset(time.Until(reset))
+		case <-sc:
+			dg.Close()
+			break L
+		}
+	}
 }
 
 func message(s *discordgo.Session, m *discordgo.MessageCreate) {
@@ -73,7 +106,7 @@ func add(s *discordgo.Session, m *discordgo.MessageCreate) {
 			"言うは易しだな、" + query[1] + "……。お前が一人で戦うというのなら別だが、零式攻略となれば、「光の戦士」に頼るほかあるまい？",
 			"薪拾いなら任せてくれよ！",
 		}
-		s.ChannelMessageSend(m.ChannelID, random[rand.Intn(2)])
+		s.ChannelMessageSend(m.ChannelID, random[rand.Intn(len(random))])
 	}
 }
 
@@ -99,7 +132,100 @@ func remove(s *discordgo.Session, m *discordgo.MessageCreate) {
 			"フフ……やはり、お前は……笑顔が……イイ……。",
 			"さらばだ光の戦士　私を導いてくれてありがとう",
 		}
-		s.ChannelMessageSend(m.ChannelID, random[rand.Intn(2)])
-
+		s.ChannelMessageSend(m.ChannelID, random[rand.Intn(len(random))])
 	}
+}
+
+func ready(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if m.Author.Bot {
+		return
+	}
+
+	query := strings.Split(m.Content, "/")
+
+	if len(query) == 2 && query[0] == "レディチェ" {
+		file, err := os.OpenFile("ready", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+
+		username := m.Author.Username
+		switch m.Author.Username {
+		case "あおさ":
+			username = "こせき"
+		case "たこのめ":
+			username = "みつ"
+		case "willow":
+			username = "ヤギヌマ"
+		case "氷筍":
+			username = "タケシ"
+		case "salt_rippi":
+			username = "そると"
+		}
+
+		fmt.Fprintln(file, username+"　"+query[1])
+		s.ChannelMessageSend(m.ChannelID, username+"のレディチェを受け付けました")
+	}
+}
+
+func check(s *discordgo.Session, c string) {
+	file, err := os.OpenFile("ready", os.O_RDWR, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	ready, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s.ChannelMessageSend(c, "ReadyCheck\n"+string(ready))
+
+	data := []byte{}
+	ioutil.WriteFile("ready", data, 0600)
+}
+
+func getTime() (time.Time, error) {
+	file, err := os.OpenFile("date", os.O_RDWR, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	date, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	d := strings.Split(string(date), "\r\n")[0]
+
+	return time.Parse("2006-01-02 15:04:05  (MST)", d)
+}
+
+func rotate() {
+	file, err := os.OpenFile("date", os.O_RDWR, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	data, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	date := strings.Split(string(data), "\r\n")
+
+	old, err := getTime()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//new := append(date[1:], old.AddDate(0, 0, 7).Format("2006-01-02 15:04:05  (MST)"))
+	new := append(date[1:], old.Add(time.Second*10).Format("2006-01-02 15:04:05  (MST)"))
+	result := strings.Join(new, "\r\n")
+
+	ioutil.WriteFile("date", []byte(result), 0600)
+
 }
