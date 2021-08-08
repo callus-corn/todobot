@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	TOKEN = ""
+	TOKEN = "ODcwOTIyNzcxODU1NzA4MTkw.YQT0CQ.8sCsa4bY0Y2zNqymJN4NQPiL3sM"
 )
 
 func main() {
@@ -60,7 +60,7 @@ L:
 		select {
 		case <-timer.C:
 			rotate()
-			check(dg, "")
+			check(dg, "868827776873009292")
 			reset, err := getTime()
 			if err != nil {
 				log.Fatal(err)
@@ -181,10 +181,9 @@ func check(s *discordgo.Session, c string) {
 		log.Fatal(err)
 	}
 
-	s.ChannelMessageSend(c, "ReadyCheck\n"+string(ready))
+	s.ChannelMessageSend(c, string(ready))
 
-	data := []byte{}
-	ioutil.WriteFile("ready", data, 0600)
+	ioutil.WriteFile("ready", []byte("今日やる感じ？やらない感じ？\r\n"), 0600)
 }
 
 func getTime() (time.Time, error) {
@@ -222,8 +221,8 @@ func rotate() {
 		log.Fatal(err)
 	}
 
-	//new := append(date[1:], old.AddDate(0, 0, 7).Format("2006-01-02 15:04:05  (MST)"))
-	new := append(date[1:], old.Add(time.Second*10).Format("2006-01-02 15:04:05  (MST)"))
+	new := append(date[1:], old.AddDate(0, 0, 7).Format("2006-01-02 15:04:05  (MST)"))
+	//new := append(date[1:], old.Add(time.Second*30).Format("2006-01-02 15:04:05  (MST)"))
 	result := strings.Join(new, "\r\n")
 
 	ioutil.WriteFile("date", []byte(result), 0600)
